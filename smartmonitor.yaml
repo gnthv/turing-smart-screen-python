@@ -1,0 +1,3 @@
+# Instellingen voor smartmonitor.py: het SmartMonitor 3,5"-schermpje (USB 0483:0065, "llhmi.com"). Zie LOKAAL.md.
+theme: res/smartmonitor/themes/standaard   # map met theme.yaml
+interval: 1                                # seconden tussen twee updates van de waarden en de klok

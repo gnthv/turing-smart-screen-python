@@ -142,3 +142,8 @@ tmp
 
 version.txt
 external/LibreHardwareMonitor/LibreHardwareMonitorLib.sys
+
+# SmartMonitor (smartmonitor.py): local state and generated files
+smartmonitor-state.json
+res/smartmonitor/themes/*/preview.png
+res/smartmonitor/themes/*/img.dat
