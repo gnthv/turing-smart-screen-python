@@ -1,0 +1,62 @@
+# Standaardthema voor het SmartMonitor 3,5"-schermpje (480 x 320). Zie LOKAAL.md, "Eigen dashboard".
+# rect en text worden vast in de achtergrond getekend; number, bar en datetime krijgen live waarden.
+name: Standaard
+background: "#0b0f17"
+
+fonts:
+  label: {file: res/fonts/roboto/Roboto-Medium.ttf, size: 15, color: "#8b98ad"}
+  small: {file: res/fonts/roboto/Roboto-Medium.ttf, size: 15, color: "#d6dde8"}
+  big:   {file: res/fonts/roboto/Roboto-Bold.ttf, size: 46, color: "#ffffff"}
+  mid:   {file: res/fonts/roboto/Roboto-Bold.ttf, size: 34, color: "#ffffff"}
+  unit:  {file: res/fonts/roboto/Roboto-Medium.ttf, size: 22, color: "#8b98ad"}
+  clock: {file: res/fonts/roboto/Roboto-Bold.ttf, size: 26, color: "#ffffff"}
+  date:  {file: res/fonts/roboto/Roboto-Medium.ttf, size: 20, color: "#8b98ad"}
+
+widgets:
+  # ---- CPU (links boven)
+  - {type: rect, x: 8, y: 8, width: 228, height: 124, color: "#151b26", radius: 12}
+  - {type: text, font: label, text: "CPU", x: 22, y: 18}
+  - {type: number, font: small, metric: cpu.freq, thousands: true, digits: 3, align: right, x: 162, y: 18}
+  - {type: text, font: label, text: "GHz", x: 222, y: 18, align: right}
+  - {type: number, font: big, metric: cpu.percent, digits: 3, align: right, x: 22, y: 42}
+  - {type: text, font: unit, text: "%", x: 104, y: 64}
+  - {type: bar, metric: cpu.percent, x: 22, y: 108, width: 200, height: 12, color: "#4cc2ff", background: "#263042"}
+
+  # ---- RAM (rechts boven)
+  - {type: rect, x: 244, y: 8, width: 228, height: 124, color: "#151b26", radius: 12}
+  - {type: text, font: label, text: "RAM", x: 258, y: 18}
+  - {type: number, font: small, metric: ram.used.mb, thousands: true, digits: 3, align: right, x: 404, y: 18}
+  - {type: text, font: label, text: "GB", x: 458, y: 18, align: right}
+  - {type: number, font: big, metric: ram.percent, digits: 3, align: right, x: 258, y: 42}
+  - {type: text, font: unit, text: "%", x: 340, y: 64}
+  - {type: bar, metric: ram.percent, x: 258, y: 108, width: 200, height: 12, color: "#b18cff", background: "#263042"}
+
+  # ---- GPU (links onder; NVIDIA)
+  - {type: rect, x: 8, y: 140, width: 228, height: 124, color: "#151b26", radius: 12}
+  - {type: text, font: label, text: "GPU", x: 22, y: 150}
+  - {type: number, font: small, metric: gpu.temp, digits: 3, align: right, x: 172, y: 150}
+  - {type: text, font: label, text: "°C", x: 222, y: 150, align: right}
+  - {type: number, font: big, metric: gpu.percent, digits: 3, align: right, x: 22, y: 174}
+  - {type: text, font: unit, text: "%", x: 104, y: 196}
+  - {type: bar, metric: gpu.percent, x: 22, y: 240, width: 200, height: 12, color: "#6ee7a8", background: "#263042"}
+
+  # ---- Netwerk (rechts onder)
+  - {type: rect, x: 244, y: 140, width: 228, height: 124, color: "#151b26", radius: 12}
+  - {type: text, font: label, text: "NETWERK", x: 258, y: 150}
+  - {type: text, font: label, text: "Download", x: 258, y: 190}
+  - {type: number, font: mid, metric: net.down.mbit, digits: 4, align: right, x: 324, y: 172}
+  - {type: text, font: label, text: "Mbit/s", x: 458, y: 190, align: right}
+  - {type: text, font: label, text: "Upload", x: 258, y: 234}
+  - {type: number, font: mid, metric: net.up.mbit, digits: 4, align: right, x: 324, y: 216}
+  - {type: text, font: label, text: "Mbit/s", x: 458, y: 234, align: right}
+
+  # ---- onderste regel: datum, schijf, klok
+  - {type: datetime, font: date, format: "DD/MM/YYYY", x: 16, y: 282}
+  - {type: text, font: label, text: "Schijf C:", x: 178, y: 285}
+  - {type: number, font: small, metric: disk.percent, digits: 3, align: right, x: 240, y: 285}
+  - {type: text, font: label, text: "% vol", x: 270, y: 285}
+  - {type: datetime, font: clock, format: "HH:mm:ss", x: 360, y: 276}
+
+# Eigen waarden (voorbeeld, uitgeschakeld): een commando dat een getal teruggeeft, elke 'every' seconden.
+# metrics:
+#   buiten.temp: {command: "powershell -NoProfile -Command \"(Invoke-RestMethod 'https://...').temp\"", every: 300}
