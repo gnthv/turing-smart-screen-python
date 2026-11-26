@@ -145,5 +145,9 @@ external/LibreHardwareMonitor/LibreHardwareMonitorLib.sys
 
 # SmartMonitor (smartmonitor.py): local state and generated files
 smartmonitor-state.json
+smartmonitor-ops.json
+smartmonitor-ops.log*
+smartmonitor.lock
+ops-preview.png
 res/smartmonitor/themes/*/preview.png
 res/smartmonitor/themes/*/img.dat

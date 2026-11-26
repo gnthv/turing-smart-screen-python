@@ -59,7 +59,8 @@ class FakeScreen:
             elif report[0] == 0x03:
                 self.clock = report[:11]
             elif report[:6] == b"\x01reset":
-                self.rebooting = True
+                self.rebooting = True  # a new upload starts from scratch (the screen accepts one theme after another)
+                self.size, self.received, self.blocks_seen, self.finished = None, b"", [], False
             elif report[:6] == b"ymodem":
                 self.mode = "ymodem"
                 self._answer(protocol.ACK)

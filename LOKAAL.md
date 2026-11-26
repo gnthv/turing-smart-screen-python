@@ -89,6 +89,60 @@ metrics:                         # eigen waarden: een commando dat een getal ter
 - Een eigen metric (`metrics:`) loopt op de achtergrond elke `every` seconden; het eerste getal van de uitvoer telt,
   maal `scale` (standaard 1).
 
+## Arcoloo ops op het schermpje (zonder browser)
+
+`smartmonitor.py ops` toont de winkels van het Arcoloo ops-dashboard om beurten, met de gateway erbij: een groot
+verkeerslicht, de naam en acht kleine lampjes (Bereikbaar, Certificaat, Backup, ...). Standaard elke 5 seconden een
+andere. Staat er iets in het **rood**, dan toont het enkel nog de rode; met één rode blijft het daarop staan tot het
+opgelost is. Hetzelfde beeld als de pagina `/minischerm.html` in ops, maar zonder browser.
+
+**Instellen (één keer)**
+
+1. In ops: **Monitor → 📟 Minischerm → Sleutel voor een pc-programma** → **Kopieer**. De sleutel kan enkel de
+   samenvatting lezen (geen details, geen knoppen) en is maar één keer zichtbaar.
+2. In deze map:
+
+   ```powershell
+   .\start-scherm.cmd ops --url https://arcoloomonitoring.up.railway.app --key
+   ```
+
+   Plak de sleutel als erom gevraagd wordt (je ziet ze niet verschijnen) en druk Enter. Adres en sleutel komen in
+   `smartmonitor-ops.json` (staat niet in git). Het thema gaat op het schermpje (ca. 20 s) en de winkels verschijnen.
+3. Vanzelf starten na het aanmelden, zonder venster:
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\ops-autostart.ps1
+   ```
+
+   Kijken of het loopt: hetzelfde met `-Controleer`; uitzetten met `-Uit`. Wat het doet, staat in
+   `smartmonitor-ops.log`.
+
+**Liggend, staand, omgedraaid** (wordt bewaard; het thema gaat daarna vanzelf opnieuw op het schermpje):
+
+| Opdracht | Wat |
+|---|---|
+| `start-scherm.cmd ops --orientation staand` | staand (320 × 480): de vakjes onder elkaar |
+| `start-scherm.cmd ops --orientation liggend` | liggend (480 × 320), standaard |
+| `start-scherm.cmd ops --upside-down ja` | het beeld 180° gedraaid (kabel aan de andere kant); `nee` = terug |
+| `start-scherm.cmd ops --seconds 10` | elke 10 s een andere winkel (2–120) |
+| `start-scherm.cmd ops-preview` | het beeld van nu als `ops-preview.png` — geen schermpje nodig |
+| `start-scherm.cmd ops-preview --test --orientation staand` | testbeeld, zonder ops |
+
+Staat het staand beeld op zijn kop, gebruik dan `--upside-down ja`. Loopt het programma al vanzelf (autostart), stop
+het dan eerst (`ops-autostart.ps1 -Uit`), wijzig de instelling en zet het weer aan.
+
+**Goed om te weten**
+
+- Eén programma tegelijk: `smartmonitor.py` weigert te starten als er al een `smartmonitor.py` loopt (dashboard of
+  ops). Sluit ook de kassa- of ops-pagina die het schermpje via de browser aanstuurt: twee schrijvers verknoeien het
+  opladen van het thema.
+- Het gewone dashboard (`start-scherm.cmd` zonder `ops`) zet daarna zijn eigen thema terug; omgekeerd ook.
+- Een nieuwe winkel of een andere naam: het thema gaat vanzelf opnieuw op het schermpje. Tot 10 namen; de 10de heet
+  dan "Andere winkels" en de teller (11/12) zegt welke het is.
+- Onderaan: "Laatste controle 3 min geleden", "Verouderd!" (ops controleert niet meer), "Geen verbinding met ops"
+  (3 min geen antwoord) of "Sleutel ongeldig" (ingetrokken in ops: maak een nieuwe en stel ze opnieuw in met `--key`).
+- Heeft ops een IP-allowlist, dan moet het internetadres van dit netwerk erin staan.
+
 ## Grenzen van het schermpje
 
 - Alleen gehele getallen van -32768 tot 32767 (wordt afgerond en begrensd).
@@ -108,8 +162,9 @@ metrics:                         # eigen waarden: een commando dat een getal ter
 ## Tests
 
 ```powershell
-.venv\Scripts\python.exe -m unittest tests.library.smartmonitor.test_smartmonitor -v
+.venv\Scripts\python.exe -m unittest tests.library.smartmonitor.test_smartmonitor tests.library.smartmonitor.test_ops -v
 ```
 
 29 tests met een nagebootst schermpje (YMODEM-ontvanger die elk blok controleert), het themaformaat, de voorvertoning,
-foutmeldingen en de waarden.
+foutmeldingen en de waarden; 27 voor `ops` (beurtrol en rood, het thema in alle vier de standen, de verbinding met ops
+met een lokale testserver, opnieuw opladen bij een nieuwe winkel, één programma tegelijk).
