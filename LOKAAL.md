@@ -131,7 +131,10 @@ linktype `arcoloo-minischerm:` klaar (in HKCU, geen beheerder nodig). De knoppen
   het programma zelf, start het dan niet als beheerder: zo'n programma kunnen de knoppen niet stoppen (het logboek zegt
   het dan).
 - Elke webpagina kan zo'n link openen. Daarom aanvaardt `smartmonitor.py link` enkel start / opnieuw / stop met die
-  drie instellingen; het adres van ops en de sleutel gaan nooit mee in een link. Een geweigerde link staat in het logboek.
+  drie instellingen; het adres van ops en de sleutel gaan nooit mee in een link. Een geweigerde link van een knop staat
+  in het logboek.
+- `-Controleer` en `-Uit` zien enkel het programma dat gestart is met `start-scherm.cmd ops`, de snelkoppeling of de
+  knoppen (niet een met de hand getypte `python smartmonitor.py ops`).
 - Of het loopt, zie je in ops bij de sleutel: *laatst gebruikt minder dan een minuut geleden*. Dat loopt tot een
   minuut achter: na Stoppen of Opnieuw duurt het even voor je het verschil ziet.
 - Verplaats je deze map, voer `ops-autostart.ps1` dan opnieuw uit (de link wijst naar de map; `-Controleer` zegt het).

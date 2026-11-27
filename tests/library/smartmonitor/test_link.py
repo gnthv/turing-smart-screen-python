@@ -62,7 +62,7 @@ class ParseTest(unittest.TestCase):
                     "arcoloo-minischerm://start?x=1&x%0A=2&x=3", "arcoloo-minischerm://st%0Aart"):
             with self.assertRaises(link.LinkError) as caught:
                 link.parse(url)
-            self.assertRegex(str(caught.exception), r"^[\x20-\x7e]*$", url)
+            self.assertRegex(str(caught.exception), r"\A[\x20-\x7e]*\Z", url)
 
 
 class Proc:

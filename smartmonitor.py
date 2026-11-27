@@ -410,7 +410,7 @@ def cmd_ops(args, config):
         write_ops_settings(settings)
         print(f"Instellingen bewaard in {os.path.basename(OPS_FILE)}.")
     if not settings["url"] or not settings["key"]:
-        sys.exit("Eerst instellen (eenmalig): python smartmonitor.py ops "
+        sys.exit("Eerst instellen (eenmalig): start-scherm.cmd ops "
                  "--url https://arcoloomonitoring.up.railway.app --key\n"
                  "(de sleutel maak je in ops: Monitor -> Minischerm -> Sleutel voor een pc-programma)")
     say = ops_logger()
@@ -467,7 +467,7 @@ def cmd_ops_preview(args, config):
         names, labels, view, line = TEST_NAMES, list(ops.TILE_LABELS), ops.TEST_VIEW, "testbeeld"
     else:
         if not settings["url"] or not settings["key"]:
-            sys.exit("Eerst instellen: python smartmonitor.py ops --url ... --key (of gebruik --test)")
+            sys.exit("Eerst instellen: start-scherm.cmd ops --url ... --key (of gebruik --test)")
         poller = ops.Poller(settings["url"], settings["key"])
         status = poller.poll_once()
         state = poller.snapshot()
