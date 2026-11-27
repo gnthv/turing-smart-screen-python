@@ -38,7 +38,8 @@ from library.smartmonitor.theme import ThemeError, compile_theme, render_preview
 CONFIG_FILE = os.path.join(HERE, "smartmonitor.yaml")
 STATE_FILE = os.path.join(HERE, "smartmonitor-state.json")
 OPS_FILE = os.path.join(HERE, "smartmonitor-ops.json")  # address of ops + screen key: local, never in git
-OPS_LOG = os.path.join(HERE, "smartmonitor-ops.log")
+# SMARTMONITOR_OPS_LOG: only for the tests (a link can't set environment variables)
+OPS_LOG = os.environ.get("SMARTMONITOR_OPS_LOG") or os.path.join(HERE, "smartmonitor-ops.log")
 LOCK_FILE = os.path.join(HERE, "smartmonitor.lock")
 DEFAULT_THEME = "res/smartmonitor/themes/standaard"
 SAMPLE_VALUE = 88
@@ -492,12 +493,17 @@ def cmd_link(args, config):
     pythonw = os.path.join(HERE, ".venv", "Scripts", "pythonw.exe")
     if not os.path.isfile(pythonw):
         pythonw = sys.executable
-    code = link.handle(args.pairs[0] if len(args.pairs) == 1 else "",
-                       read_settings=read_ops_settings, write_settings=write_ops_settings,
-                       running=lambda: link.ops_processes(program),
-                       stop_them=link.stop,
-                       start_it=lambda: link.start(pythonw, program, HERE),
-                       say=ops_logger())
+    say = ops_logger()
+    try:
+        code = link.handle(args.pairs[0] if len(args.pairs) == 1 else "",
+                           read_settings=read_ops_settings, write_settings=write_ops_settings,
+                           running=lambda: link.ops_processes(program),
+                           stop_them=link.stop,
+                           start_it=lambda: link.start(pythonw, program, HERE),
+                           say=say)
+    except Exception as error:  # pythonw has no window: without this line a failed click leaves no trace
+        say(f"Knop in ops: mislukt ({type(error).__name__}: {link.shown(error, 200)}).")
+        code = 1
     if code:
         sys.exit(code)
 

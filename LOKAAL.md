@@ -127,10 +127,13 @@ linktype `arcoloo-minischerm:` klaar (in HKCU, geen beheerder nodig). De knoppen
 - Werkt op de pc waarop je klikt. De eerste keer vraagt Chrome "Arcoloo minischerm openen?": vink *altijd toestaan* aan.
 - Stand, omgedraaid en seconden kies je ernaast ("zoals ingesteld" = niet veranderen). Loopt het al en kies je iets
   anders, dan start het opnieuw met de nieuwe keuze (bewaard in `smartmonitor-ops.json`).
-- Stoppen stopt enkel `smartmonitor.py ops` uit déze map; het eigen dashboard en andere programma's niet.
+- Stoppen stopt enkel `smartmonitor.py ops` uit déze map; het eigen dashboard en andere programma's niet. Start je
+  het programma zelf, start het dan niet als beheerder: zo'n programma kunnen de knoppen niet stoppen (het logboek zegt
+  het dan).
 - Elke webpagina kan zo'n link openen. Daarom aanvaardt `smartmonitor.py link` enkel start / opnieuw / stop met die
   drie instellingen; het adres van ops en de sleutel gaan nooit mee in een link. Een geweigerde link staat in het logboek.
-- Of het loopt, zie je in ops bij de sleutel: *laatst gebruikt minder dan een minuut geleden*.
+- Of het loopt, zie je in ops bij de sleutel: *laatst gebruikt minder dan een minuut geleden*. Dat loopt tot een
+  minuut achter: na Stoppen of Opnieuw duurt het even voor je het verschil ziet.
 - Verplaats je deze map, voer `ops-autostart.ps1` dan opnieuw uit (de link wijst naar de map; `-Controleer` zegt het).
 
 **Liggend, staand, omgedraaid** (wordt bewaard; het thema gaat daarna vanzelf opnieuw op het schermpje):

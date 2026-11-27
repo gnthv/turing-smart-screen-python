@@ -32,6 +32,12 @@ class LinkError(ValueError):
     pass
 
 
+def shown(text, length=20):
+    """A piece of the link for the log: short, only printable ASCII. parse_qsl decodes %0D%0A, and a web page must
+    not be able to write its own lines into smartmonitor-ops.log."""
+    return re.sub(r"[^\x20-\x7e]", "?", str(text)[:length])
+
+
 def parse(url):
     """(verb, settings) from a link; LinkError for anything that is not exactly on the list."""
     text = str(url or "").strip()
@@ -39,12 +45,15 @@ def parse(url):
         raise LinkError("geen link")
     if len(text) > MAX_LENGTH:
         raise LinkError("link te lang")
-    parts = urlsplit(text)
+    try:
+        parts = urlsplit(text)  # "//[start" or a full-width "#" raise a plain ValueError
+    except ValueError:
+        raise LinkError("onleesbare link") from None
     if parts.scheme.lower() != SCHEME:
         raise LinkError(f"geen {SCHEME}-link")
     verb = (parts.netloc + parts.path).strip("/").lower()
     if verb not in VERBS:
-        raise LinkError(f"onbekende opdracht '{verb[:20]}'")
+        raise LinkError(f"onbekende opdracht '{shown(verb)}'")
     settings = {}
     try:
         pairs = parse_qsl(parts.query, keep_blank_values=True, strict_parsing=True) if parts.query else []
@@ -54,7 +63,7 @@ def parse(url):
     for name, value in pairs:
         name, value = name.strip().lower(), value.strip().lower()
         if name in seen:
-            raise LinkError(f"'{name[:20]}' staat er twee keer in")
+            raise LinkError(f"'{shown(name)}' staat er twee keer in")
         seen.add(name)
         if name == "stand" and value in STAND:
             settings["orientation"] = STAND[value]
@@ -65,7 +74,7 @@ def parse(url):
         elif name in ("stand", "omgedraaid", "seconden"):
             raise LinkError(f"waarde voor '{name}' niet toegelaten")
         else:
-            raise LinkError(f"onbekende instelling '{name[:20]}'")
+            raise LinkError(f"onbekende instelling '{shown(name)}'")
     if verb == "stop" and settings:
         raise LinkError("stop neemt geen instellingen")
     return verb, settings
@@ -77,7 +86,9 @@ def _same_file(a, b):
 
 def ops_processes(program, processes=None):
     """The running "smartmonitor.py ops" of this folder: the window (python) and the one without (pythonw, which
-    is two processes in a venv: launcher + interpreter)."""
+    is two processes in a venv: launcher + interpreter). "ops" must come right after the script, the way autostart,
+    start() and start-scherm.cmd ops start it: "smartmonitor.py run --theme ops" is the own dashboard, not ops (a
+    hand-typed "smartmonitor.py --upload ops" is then not stopped either: the safe side; the lock still allows one)."""
     import psutil
     if processes is None:
         processes = psutil.process_iter(["pid", "cmdline", "cwd"])
@@ -91,24 +102,37 @@ def ops_processes(program, processes=None):
         args = list(cmdline[1:])
         for index, arg in enumerate(args):
             if os.path.basename(arg).lower() == "smartmonitor.py":
-                if _same_file(os.path.join(cwd, arg), program) and "ops" in args[index + 1:]:
+                if _same_file(os.path.join(cwd, arg), program) and args[index + 1:index + 2] == ["ops"]:
                     found.append(proc)
                 break
     return found
 
 
+NOT_RUNNING, STOPPED, STILL_RUNNING = "not-running", "stopped", "still-running"
+
+
 def stop(processes, timeout=10):
-    """Stop them; True when something was running."""
+    """Stop them: NOT_RUNNING, STOPPED, or STILL_RUNNING when one survived (e.g. started as administrator)."""
     import psutil
     if not processes:
-        return False
+        return NOT_RUNNING
     for proc in processes:
         try:
             proc.terminate()
         except psutil.Error:
             pass
-    psutil.wait_procs(processes, timeout=timeout)
-    return True
+    try:
+        _, alive = psutil.wait_procs(processes, timeout=timeout)
+    except psutil.Error:  # not even allowed to wait on it
+        alive = [proc for proc in processes if _alive(proc)]
+    return STILL_RUNNING if alive else STOPPED
+
+
+def _alive(proc):
+    try:
+        return proc.is_running()
+    except Exception:
+        return True
 
 
 def start(pythonw, program, here, popen=subprocess.Popen):
@@ -126,30 +150,38 @@ def start(pythonw, program, here, popen=subprocess.Popen):
         return popen(command, creationflags=flags, **kwargs)
 
 
+CANT_STOP = "Knop in ops: kon het programma niet stoppen (als beheerder gestart? stop het daar)."
+
+
 def handle(url, *, read_settings, write_settings, running, stop_them, start_it, say):
-    """Do what the link asks. Returns 0 when done, 2 when the link is refused, 1 when it can't start."""
+    """Do what the link asks. Returns 0 when done, 2 when the link is refused, 1 when it can't (not set up yet, or
+    the running program can't be stopped)."""
     try:
         verb, wanted = parse(url)
     except LinkError as error:
         say(f"Link uit een webpagina geweigerd: {error}.")
         return 2
     settings = read_settings()
+    if verb != "stop" and (not settings.get("url") or not settings.get("key")):
+        # before saving anything: a half settings file would get past the check in ops-autostart.ps1
+        say("Knop in ops: eerst instellen (eenmalig) met start-scherm.cmd ops --url ... --key (zie LOKAAL.md).")
+        return 1
     changed = {k: v for k, v in wanted.items() if settings.get(k) != v}
     if changed:
         settings.update(changed)
         write_settings(settings)
         say("Knop in ops: instellingen bewaard (" + ", ".join(f"{k}={v}" for k, v in changed.items()) + ").")
     procs = running()
-    if verb == "stop":
-        say("Knop in ops: gestopt." if stop_them(procs) else "Knop in ops: stoppen, maar het liep niet.")
-        return 0
     if verb == "start" and procs and not changed:
         say("Knop in ops: starten, maar het loopt al.")
         return 0
-    if not settings.get("url") or not settings.get("key"):
-        say("Knop in ops: eerst instellen (eenmalig) met start-scherm.cmd ops --url ... --key (zie LOKAAL.md).")
+    result = stop_them(procs)
+    if result == STILL_RUNNING:
+        say(CANT_STOP)
         return 1
-    again = stop_them(procs)
+    if verb == "stop":
+        say("Knop in ops: gestopt." if result == STOPPED else "Knop in ops: stoppen, maar het liep niet.")
+        return 0
     start_it()
-    say("Knop in ops: opnieuw gestart." if again else "Knop in ops: gestart.")
+    say("Knop in ops: opnieuw gestart." if result == STOPPED else "Knop in ops: gestart.")
     return 0

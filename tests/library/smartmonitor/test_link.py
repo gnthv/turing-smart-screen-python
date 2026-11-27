@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, ROOT)
@@ -49,10 +50,19 @@ class ParseTest(unittest.TestCase):
             "arcoloo-minischerm://start?seconden=%C2%B2", "arcoloo-minischerm://start?seconden=-5",
             "arcoloo-minischerm://start?stand=staand&stand=liggend", "arcoloo-minischerm://start?stand",
             "arcoloo-minischerm://stop?stand=staand", "arcoloo-minischerm://start?" + "x" * 300,
+            # urlsplit raises a plain ValueError on these (not from a browser, but a .url file or the Run dialog)
+            "arcoloo-minischerm://[start", "arcoloo-minischerm://start]", "arcoloo-minischerm://st＃art",
         ]
         for url in refused:
             with self.assertRaises(link.LinkError, msg=url):
                 link.parse(url)
+
+    def test_the_reason_cannot_write_own_lines_in_the_log(self):
+        for url in ("arcoloo-minischerm://start?a%0D%0Ab%1B%E2%80%AE=1",
+                    "arcoloo-minischerm://start?x=1&x%0A=2&x=3", "arcoloo-minischerm://st%0Aart"):
+            with self.assertRaises(link.LinkError) as caught:
+                link.parse(url)
+            self.assertRegex(str(caught.exception), r"^[\x20-\x7e]*$", url)
 
 
 class Proc:
@@ -73,6 +83,9 @@ class FindTest(unittest.TestCase):
             "other folder": Proc(["python.exe", other, "ops"]),
             "own dashboard": Proc(["python.exe", program]),
             "run": Proc(["python.exe", program, "run"]),
+            "dashboard theme named ops": Proc(["python.exe", program, "run", "--theme", "ops"]),
+            "preview": Proc(["python.exe", program, "ops-preview"]),
+            "hand-typed option first": Proc(["python.exe", program, "--upload", "ops"]),  # not stopped: safe side
             "the handler": Proc([pythonw, program, "link", "arcoloo-minischerm://stop"]),
             "editor": Proc(["notepad.exe", program]),
             "empty": Proc(None),
@@ -98,14 +111,35 @@ class FindTest(unittest.TestCase):
                 pids = {p.pid for p in found}
                 self.assertIn(mine.pid, pids)
                 self.assertNotIn(other.pid, pids)
-                self.assertTrue(link.stop(found))
+                self.assertEqual(link.stop(found), link.STOPPED)
                 self.assertIsNotNone(mine.wait(timeout=10))
                 self.assertIsNone(other.poll())
-                self.assertFalse(link.stop(link.ops_processes(program)))
+                self.assertEqual(link.stop(link.ops_processes(program)), link.NOT_RUNNING)
             finally:
                 for proc in (mine, other):
                     proc.kill()
                     proc.wait()
+
+
+class Unstoppable:
+    """A process started as administrator: we may read its command line, but not stop it or wait on it."""
+
+    def terminate(self):
+        import psutil
+        raise psutil.AccessDenied(1234)
+
+    def is_running(self):
+        return True
+
+
+class StopTest(unittest.TestCase):
+    def test_a_process_that_cannot_be_stopped_is_reported(self):
+        import psutil
+        with mock.patch.object(psutil, "wait_procs", side_effect=psutil.AccessDenied(1234)):
+            self.assertEqual(link.stop([Unstoppable()]), link.STILL_RUNNING)
+        with mock.patch.object(psutil, "wait_procs", return_value=([], [Unstoppable()])):
+            self.assertEqual(link.stop([Unstoppable()]), link.STILL_RUNNING)
+        self.assertEqual(link.stop([]), link.NOT_RUNNING)
 
 
 class StartTest(unittest.TestCase):
@@ -129,7 +163,7 @@ class StartTest(unittest.TestCase):
 
 
 class HandleTest(unittest.TestCase):
-    def run_link(self, url, running=False, settings=None):
+    def run_link(self, url, running=False, settings=None, stoppable=True):
         self.settings = dict(settings or {"url": "https://ops.example.org", "key": "msk_" + "a" * 43,
                                           "seconds": 5, "orientation": "landscape", "upside_down": False})
         self.saved, self.events, self.lines = [], [], []
@@ -137,8 +171,12 @@ class HandleTest(unittest.TestCase):
 
         def stop_them(procs):
             self.events.append("stop")
-            was, self.alive = bool(procs), False
-            return was
+            if not procs:
+                return link.NOT_RUNNING
+            if not stoppable:
+                return link.STILL_RUNNING
+            self.alive = False
+            return link.STOPPED
 
         def start_it():
             self.events.append("start")
@@ -191,21 +229,45 @@ class HandleTest(unittest.TestCase):
         self.assertEqual(self.run_link("arcoloo-minischerm://start", settings={"url": "", "key": ""}), 1)
         self.assertEqual(self.events, [])
         self.assertIn("eerst instellen", self.lines[-1])
+        # with settings: nothing saved either (a half settings file would fool ops-autostart.ps1)
+        self.assertEqual(self.run_link("arcoloo-minischerm://start?stand=staand", settings={"url": "", "key": ""}), 1)
+        self.assertEqual((self.events, self.saved), ([], []))
+        # stopping needs no settings
+        self.assertEqual(self.run_link("arcoloo-minischerm://stop", settings={"url": "", "key": ""}), 0)
+
+    def test_running_program_that_cannot_be_stopped(self):
+        for url in ("arcoloo-minischerm://stop", "arcoloo-minischerm://opnieuw",
+                    "arcoloo-minischerm://start?seconden=9"):
+            self.assertEqual(self.run_link(url, running=True, stoppable=False), 1, url)
+            self.assertEqual(self.events, ["stop"], url)  # no second program next to it
+            self.assertEqual(self.lines[-1], link.CANT_STOP)
 
 
 class ProgramTest(unittest.TestCase):
+    def run_link_command(self, *pairs):
+        """smartmonitor.py link with its own log file, not the folder's smartmonitor-ops.log."""
+        with tempfile.TemporaryDirectory() as tmp:
+            log = os.path.join(tmp, "ops.log")
+            done = subprocess.run([sys.executable, os.path.join(ROOT, "smartmonitor.py"), "link", *pairs],
+                                  capture_output=True, text=True, cwd=ROOT, timeout=60,
+                                  env=dict(os.environ, SMARTMONITOR_OPS_LOG=log))
+            logged = ""
+            if os.path.exists(log):
+                with open(log, encoding="utf-8") as stream:
+                    logged = stream.read()
+            return done, logged
+
     def test_link_command_refuses_a_wrong_link(self):
-        done = subprocess.run([sys.executable, os.path.join(ROOT, "smartmonitor.py"), "link",
-                               "arcoloo-minischerm://start?url=https://x.org"],
-                              capture_output=True, text=True, cwd=ROOT, timeout=60)
-        self.assertEqual(done.returncode, 2, done.stderr)
-        self.assertIn("geweigerd", done.stdout)
+        for url in ("arcoloo-minischerm://start?url=https://x.org", "arcoloo-minischerm://[start"):
+            done, logged = self.run_link_command(url)
+            self.assertEqual(done.returncode, 2, done.stderr)
+            self.assertIn("geweigerd", done.stdout)
+            self.assertIn("geweigerd", logged)
 
     def test_link_command_wants_exactly_one_link(self):
-        done = subprocess.run([sys.executable, os.path.join(ROOT, "smartmonitor.py"), "link",
-                               "arcoloo-minischerm://stop", "ops"],
-                              capture_output=True, text=True, cwd=ROOT, timeout=60)
+        done, logged = self.run_link_command("arcoloo-minischerm://stop", "ops")
         self.assertEqual(done.returncode, 2, done.stderr)
+        self.assertIn("geen link", logged)
 
 
 if __name__ == "__main__":

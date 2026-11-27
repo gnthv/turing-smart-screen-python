@@ -19,9 +19,21 @@ $link = Join-Path ([Environment]::GetFolderPath('Startup')) 'Arcoloo minischerm.
 $scheme = 'HKCU:\Software\Classes\arcoloo-minischerm'
 $handler = '"' + $pythonw + '" "' + $program + '" link "%1"'
 
+# Only "smartmonitor.py ops" of THIS folder, with ops right after the script (how the shortcut, start-scherm.cmd ops
+# and the buttons start it): not another folder, not "run --theme ops".
 function Get-OpsProcess {
-    Get-CimInstance Win32_Process -Filter "Name like 'python%'" |
-        Where-Object { $_.CommandLine -like '*smartmonitor.py*' -and $_.CommandLine -match '\sops(\s|$)' }
+    Get-CimInstance Win32_Process -Filter "Name like 'python%'" | Where-Object {
+        $c = $_.CommandLine
+        if (-not $c) { return $false }
+        $i = $c.IndexOf($program, [StringComparison]::OrdinalIgnoreCase)
+        ($i -ge 0) -and ($c.Substring($i + $program.Length) -match '^"?\s+ops(\s|$)')
+    }
+}
+
+function Test-Settings {
+    if (-not (Test-Path -LiteralPath $settings)) { return $false }
+    try { $s = Get-Content -LiteralPath $settings -Raw | ConvertFrom-Json } catch { return $false }
+    return [bool]($s -and $s.url -and $s.key)
 }
 
 function Get-LinkCommand {
@@ -47,19 +59,19 @@ function Stop-Ops {
 }
 
 if ($Controleer) {
-    if (Test-Path $link) { 'Vanzelf starten: AAN' } else { 'Vanzelf starten: uit' }
+    if (Test-Path -LiteralPath $link) { 'Vanzelf starten: AAN' } else { 'Vanzelf starten: uit' }
     $current = Get-LinkCommand
     if (-not $current) { 'Knoppen in ops: uit' }
     elseif ($current -eq $handler) { 'Knoppen in ops: AAN' }
     else { "Knoppen in ops: AAN, maar voor een andere map: $current" }
     $running = @(Get-OpsProcess)
     if ($running.Count) { "Loopt nu: ja (proces $($running.ProcessId -join ', '))" } else { 'Loopt nu: nee' }
-    if (Test-Path $log) { ''; 'Laatste regels van het logboek:'; Get-Content $log -Tail 8 -Encoding UTF8 }
+    if (Test-Path -LiteralPath $log) { ''; 'Laatste regels van het logboek:'; Get-Content -LiteralPath $log -Tail 8 -Encoding UTF8 }
     exit 0
 }
 
 if ($Uit -or $Verwijder) {
-    if (Test-Path $link) { Remove-Item $link; 'Vanzelf starten: uit.' } else { 'Vanzelf starten stond al uit.' }
+    if (Test-Path -LiteralPath $link) { Remove-Item -LiteralPath $link; 'Vanzelf starten: uit.' } else { 'Vanzelf starten stond al uit.' }
     if ($Verwijder) {
         if (Test-Path $scheme) { Remove-Item -Path $scheme -Recurse; 'Knoppen in ops: uit.' }
     } elseif (Get-LinkCommand) {
@@ -69,12 +81,12 @@ if ($Uit -or $Verwijder) {
     exit 0
 }
 
-if (-not (Test-Path $pythonw)) { 'Nog niet geinstalleerd: zie LOKAAL.md, stap 1.'; exit 1 }
+if (-not (Test-Path -LiteralPath $pythonw)) { 'Nog niet geinstalleerd: zie LOKAAL.md, stap 1.'; exit 1 }
 
 Set-OpsLink
 if ($Knop) { exit 0 }
 
-if (-not (Test-Path $settings)) {
+if (-not (Test-Settings)) {
     'Eerst instellen (eenmalig), in deze map:'
     '  start-scherm.cmd ops --url https://arcoloomonitoring.up.railway.app --key'
     'en plak de sleutel uit ops (Monitor -> Minischerm -> Sleutel voor een pc-programma).'
@@ -93,7 +105,9 @@ $shortcut.Save()
 if (@(Get-OpsProcess).Count) {
     'Het programma loopt al.'
 } else {
-    Start-Process -FilePath $pythonw -ArgumentList ('"' + $program + '" ops') -WorkingDirectory $here
+    # -WorkingDirectory reads [ ] as wildcards: escape them (a folder like "scherm [2]")
+    Start-Process -FilePath $pythonw -ArgumentList ('"' + $program + '" ops') `
+        -WorkingDirectory ([Management.Automation.WildcardPattern]::Escape($here))
     'Gestart zonder venster. De eerste keer zet het zijn thema op het schermpje (ca. 20 s, het herstart twee keer).'
 }
 "Controleren: powershell -NoProfile -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`" -Controleer"
