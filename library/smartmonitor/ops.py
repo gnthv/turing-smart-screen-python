@@ -728,6 +728,8 @@ class OpsScreen:
         self.say(f"Thema opladen ({len(data)} bytes, {len(names)} naam/namen, {self.orientation}"
                  f"{', omgedraaid' if self.upside_down else ''}); het schermpje start twee keer opnieuw op...")
         started = time.monotonic()
+        # Upload under way: stopped now (Opnieuw in ops, Ctrl+C), the next start must not think a theme is on it.
+        self.store.set_digest(None, names, list(self.theme_key[1]))
         self.upload(self.transport, data, None)
         self.store.set_digest(digest, names, list(self.theme_key[1]))
         self.say(f"Thema opgeladen in {time.monotonic() - started:.0f} s.")

@@ -115,7 +115,29 @@ opgelost is. Hetzelfde beeld als de pagina `/minischerm.html` in ops, maar zonde
    ```
 
    Kijken of het loopt: hetzelfde met `-Controleer`; uitzetten met `-Uit`. Wat het doet, staat in
-   `smartmonitor-ops.log`.
+   `smartmonitor-ops.log`. Dit zet ook de knoppen in ops aan (hieronder); wil je die zonder vanzelf starten, gebruik
+   dan `-Knop`. Alles weg (vanzelf starten én knoppen): `-Verwijder`.
+
+**Starten en stoppen vanuit ops** (Monitor → 📟 Minischerm → *Op deze pc*)
+
+Een webpagina kan zelf geen programma op de pc starten. `ops-autostart.ps1` zet daarom voor jouw Windows-gebruiker het
+linktype `arcoloo-minischerm:` klaar (in HKCU, geen beheerder nodig). De knoppen **▶ Starten**, **↻ Opnieuw** en
+**■ Stoppen** in ops openen zo'n link, en Windows start dan `smartmonitor.py link` zonder venster:
+
+- Werkt op de pc waarop je klikt. De eerste keer vraagt Chrome "Arcoloo minischerm openen?": vink *altijd toestaan* aan.
+- Stand, omgedraaid en seconden kies je ernaast ("zoals ingesteld" = niet veranderen). Loopt het al en kies je iets
+  anders, dan start het opnieuw met de nieuwe keuze (bewaard in `smartmonitor-ops.json`).
+- Stoppen stopt enkel `smartmonitor.py ops` uit déze map; het eigen dashboard en andere programma's niet. Start je
+  het programma zelf, start het dan niet als beheerder: zo'n programma kunnen de knoppen niet stoppen (het logboek zegt
+  het dan).
+- Elke webpagina kan zo'n link openen. Daarom aanvaardt `smartmonitor.py link` enkel start / opnieuw / stop met die
+  drie instellingen; het adres van ops en de sleutel gaan nooit mee in een link. Een geweigerde link van een knop staat
+  in het logboek.
+- `-Controleer` en `-Uit` zien enkel het programma dat gestart is met `start-scherm.cmd ops`, de snelkoppeling of de
+  knoppen (niet een met de hand getypte `python smartmonitor.py ops`).
+- Of het loopt, zie je in ops bij de sleutel: *laatst gebruikt minder dan een minuut geleden*. Dat loopt tot een
+  minuut achter: na Stoppen of Opnieuw duurt het even voor je het verschil ziet.
+- Verplaats je deze map, voer `ops-autostart.ps1` dan opnieuw uit (de link wijst naar de map; `-Controleer` zegt het).
 
 **Liggend, staand, omgedraaid** (wordt bewaard; het thema gaat daarna vanzelf opnieuw op het schermpje):
 
@@ -129,7 +151,8 @@ opgelost is. Hetzelfde beeld als de pagina `/minischerm.html` in ops, maar zonde
 | `start-scherm.cmd ops-preview --test --orientation staand` | testbeeld, zonder ops |
 
 Staat het staand beeld op zijn kop, gebruik dan `--upside-down ja`. Loopt het programma al vanzelf (autostart), stop
-het dan eerst (`ops-autostart.ps1 -Uit`), wijzig de instelling en zet het weer aan.
+het dan eerst (`ops-autostart.ps1 -Uit`), wijzig de instelling en zet het weer aan. Of kies het in ops bij *Op deze pc*
+en klik **▶ Starten**.
 
 **Goed om te weten**
 
@@ -162,7 +185,7 @@ het dan eerst (`ops-autostart.ps1 -Uit`), wijzig de instelling en zet het weer a
 ## Tests
 
 ```powershell
-.venv\Scripts\python.exe -m unittest tests.library.smartmonitor.test_smartmonitor tests.library.smartmonitor.test_ops -v
+.venv\Scripts\python.exe -m unittest tests.library.smartmonitor.test_smartmonitor tests.library.smartmonitor.test_ops tests.library.smartmonitor.test_link -v
 ```
 
 29 tests met een nagebootst schermpje (YMODEM-ontvanger die elk blok controleert), het themaformaat, de voorvertoning,

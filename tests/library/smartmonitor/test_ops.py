@@ -408,6 +408,24 @@ class ScreenTest(unittest.TestCase):
         self.assertFalse(fake.finished)
         self.assertEqual(fake.values[ops.TAGS["footer"]], ops.FOOTER["pending"])
 
+    def test_upload_stopped_halfway_is_done_again(self):
+        # liggend on the screen, then staand starts uploading and is stopped (Opnieuw in ops), then liggend again
+        store = Store()
+        fake, _, screen = self.make(ok_state(payload(target("a"))), store)
+        screen.tick(MOMENT, now_ms=0)
+
+        def stopped_halfway(transport, data, progress):
+            raise KeyboardInterrupt  # what terminate() looks like from the inside: no time to clean up
+
+        _, _, screen = self.make(ok_state(payload(target("a"))), store, orientation="portrait")
+        screen.upload = stopped_halfway
+        with self.assertRaises(KeyboardInterrupt):
+            screen.tick(MOMENT, now_ms=0)
+        self.assertIsNone(store.digest)  # nobody knows what is on the screen now
+        fake, _, screen = self.make(ok_state(payload(target("a"))), store)
+        screen.tick(MOMENT, now_ms=0)
+        self.assertTrue(fake.finished)  # so liggend goes on it again
+
     def test_turning_the_screen_uploads_again(self):
         store = Store()
         fake, _, screen = self.make(ok_state(payload(target("a"))), store)

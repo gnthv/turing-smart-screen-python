@@ -14,6 +14,7 @@
 #   python smartmonitor.py send 1=42 5=60  send test values for tags
 #   python smartmonitor.py ops             Arcoloo ops: every shop + the gateway in turn (see LOKAAL.md, "Arcoloo ops")
 #   python smartmonitor.py ops-preview     draw that screen as ops-preview.png (no screen needed)
+#   python smartmonitor.py link <link>     what Windows runs for the Start/Stop buttons in ops (see ops-autostart.ps1)
 
 import argparse
 import atexit
@@ -37,7 +38,8 @@ from library.smartmonitor.theme import ThemeError, compile_theme, render_preview
 CONFIG_FILE = os.path.join(HERE, "smartmonitor.yaml")
 STATE_FILE = os.path.join(HERE, "smartmonitor-state.json")
 OPS_FILE = os.path.join(HERE, "smartmonitor-ops.json")  # address of ops + screen key: local, never in git
-OPS_LOG = os.path.join(HERE, "smartmonitor-ops.log")
+# SMARTMONITOR_OPS_LOG: only for the tests (a link can't set environment variables)
+OPS_LOG = os.environ.get("SMARTMONITOR_OPS_LOG") or os.path.join(HERE, "smartmonitor-ops.log")
 LOCK_FILE = os.path.join(HERE, "smartmonitor.lock")
 DEFAULT_THEME = "res/smartmonitor/themes/standaard"
 SAMPLE_VALUE = 88
@@ -408,7 +410,7 @@ def cmd_ops(args, config):
         write_ops_settings(settings)
         print(f"Instellingen bewaard in {os.path.basename(OPS_FILE)}.")
     if not settings["url"] or not settings["key"]:
-        sys.exit("Eerst instellen (eenmalig): python smartmonitor.py ops "
+        sys.exit("Eerst instellen (eenmalig): start-scherm.cmd ops "
                  "--url https://arcoloomonitoring.up.railway.app --key\n"
                  "(de sleutel maak je in ops: Monitor -> Minischerm -> Sleutel voor een pc-programma)")
     say = ops_logger()
@@ -465,7 +467,7 @@ def cmd_ops_preview(args, config):
         names, labels, view, line = TEST_NAMES, list(ops.TILE_LABELS), ops.TEST_VIEW, "testbeeld"
     else:
         if not settings["url"] or not settings["key"]:
-            sys.exit("Eerst instellen: python smartmonitor.py ops --url ... --key (of gebruik --test)")
+            sys.exit("Eerst instellen: start-scherm.cmd ops --url ... --key (of gebruik --test)")
         poller = ops.Poller(settings["url"], settings["key"])
         status = poller.poll_once()
         state = poller.snapshot()
@@ -484,6 +486,28 @@ def cmd_ops_preview(args, config):
     print(line)
 
 
+def cmd_link(args, config):
+    """Windows runs this for an arcoloo-minischerm: link from the ops page (ops-autostart.ps1 registers it)."""
+    from library.smartmonitor import link
+    program = os.path.join(HERE, "smartmonitor.py")
+    pythonw = os.path.join(HERE, ".venv", "Scripts", "pythonw.exe")
+    if not os.path.isfile(pythonw):
+        pythonw = sys.executable
+    say = ops_logger()
+    try:
+        code = link.handle(args.pairs[0] if len(args.pairs) == 1 else "",
+                           read_settings=read_ops_settings, write_settings=write_ops_settings,
+                           running=lambda: link.ops_processes(program),
+                           stop_them=link.stop,
+                           start_it=lambda: link.start(pythonw, program, HERE),
+                           say=say)
+    except Exception as error:  # pythonw has no window: without this line a failed click leaves no trace
+        say(f"Knop in ops: mislukt ({type(error).__name__}: {link.shown(error, 200)}).")
+        code = 1
+    if code:
+        sys.exit(code)
+
+
 def yes_no(text):
     word = str(text).strip().lower()
     if word in ("ja", "yes", "aan", "on", "1", "true"):
@@ -497,8 +521,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Eigen dashboards op het SmartMonitor 3,5\"-schermpje (0483:0065).")
     parser.add_argument("command", nargs="?", default="run",
                         choices=["run", "preview", "upload", "compile", "metrics", "devices", "send", "ops",
-                                 "ops-preview"])
-    parser.add_argument("pairs", nargs="*", help="bij send: tag=waarde ...")
+                                 "ops-preview", "link"])
+    parser.add_argument("pairs", nargs="*", help="bij send: tag=waarde ...; bij link: de arcoloo-minischerm-link")
     parser.add_argument("--theme", help="themamap (standaard: theme uit smartmonitor.yaml)")
     parser.add_argument("--out", help="uitvoerbestand voor preview, ops-preview of compile")
     parser.add_argument("--upload", action="store_true", help="bij run en ops: het thema altijd opnieuw opladen")
@@ -516,7 +540,7 @@ def main(argv=None):
     config = load_config()
     commands = {"run": cmd_run, "preview": cmd_preview, "upload": cmd_upload, "compile": cmd_compile,
                 "metrics": cmd_metrics, "devices": cmd_devices, "send": cmd_send, "ops": cmd_ops,
-                "ops-preview": cmd_ops_preview}
+                "ops-preview": cmd_ops_preview, "link": cmd_link}
     try:
         commands[args.command](args, config)
     except KeyboardInterrupt:
