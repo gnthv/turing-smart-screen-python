@@ -159,6 +159,10 @@ en klik **▶ Starten**.
 - Eén programma tegelijk: `smartmonitor.py` weigert te starten als er al een `smartmonitor.py` loopt (dashboard of
   ops). Sluit ook de kassa- of ops-pagina die het schermpje via de browser aanstuurt: twee schrijvers verknoeien het
   opladen van het thema.
+- Verdwijnt het schermpje even terwijl dit programma zelf niets oplaadt, dan stuurt het niets meer tot het weet wat er
+  gebeurt. Komt het terug en blijft het 45 s rustig (kabel even uit), dan gaat het gewoon verder. Herstart het nog een
+  keer, dan zette een ander programma er een thema op (het minischerm in de browser of de kassa): dit programma stopt
+  dan met een melding, zodat het dat opladen niet kapotmaakt. De volgende start zet zijn eigen thema er weer op.
 - Het gewone dashboard (`start-scherm.cmd` zonder `ops`) zet daarna zijn eigen thema terug; omgekeerd ook.
 - Een nieuwe winkel of een andere naam: het thema gaat vanzelf opnieuw op het schermpje. Tot 10 namen; de 10de heet
   dan "Andere winkels" en de teller (11/12) zegt welke het is.
@@ -185,13 +189,18 @@ en klik **▶ Starten**.
 - **Klok blijft op 12:00:00 / 2022-01-01 en er verandert niets**: het schermpje hangt (gebeurt soms na het
   opstarten van de pc). Trek het uit en steek het terug in.
 - **Opladen mislukt**: uittrekken, terug insteken, `smartmonitor.py upload`.
+- **Zwart scherm met "boot" linksboven, en het blijft zo**: een thema werd niet afgemaakt, meestal omdat twee
+  programma's het schermpje tegelijk aanstuurden. Laat er één over (dit programma, of de minischerm- of kassapagina),
+  trek het schermpje uit, steek het terug in en zet het thema er opnieuw op: hier met `start-scherm.cmd ops --upload`,
+  in de browser met *Thema opnieuw opzetten*.
 
 ## Tests
 
 ```powershell
-.venv\Scripts\python.exe -m unittest tests.library.smartmonitor.test_smartmonitor tests.library.smartmonitor.test_ops tests.library.smartmonitor.test_link -v
+.venv\Scripts\python.exe -m unittest tests.library.smartmonitor.test_smartmonitor tests.library.smartmonitor.test_ops tests.library.smartmonitor.test_link tests.library.smartmonitor.test_watch -v
 ```
 
 38 tests met een nagebootst schermpje (YMODEM-ontvanger die elk blok controleert), het themaformaat, de voorvertoning,
 foutmeldingen en de waarden; 27 voor `ops` (beurtrol en rood, het thema in alle vier de standen, de verbinding met ops
-met een lokale testserver, opnieuw opladen bij een nieuwe winkel, één programma tegelijk).
+met een lokale testserver, opnieuw opladen bij een nieuwe winkel, één programma tegelijk); 8 voor een ander programma
+dat een thema oplaadt (kabel even uit, wiebelende stekker, twee herstarts = stoppen).
