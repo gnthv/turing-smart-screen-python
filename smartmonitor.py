@@ -5,6 +5,9 @@
 # This screen is not supported by main.py (it is no framebuffer): it plays a theme stored in its flash and receives
 # only numbers and the clock. See LOKAAL.md.
 #
+# "python" below is the tool's own Python: .venv\Scripts\python.exe (or start-scherm.cmd, which uses it). Another
+# Python lacks the packages; smartmonitor.py then says how to start it instead of showing a traceback.
+#
 #   python smartmonitor.py                 run: upload the theme when it changed, then send the values every second
 #   python smartmonitor.py preview         draw the theme as preview.png (no screen needed)
 #   python smartmonitor.py upload          upload the theme again, even when unchanged
@@ -26,7 +29,57 @@ import os
 import sys
 import time
 
-import yaml
+COMMANDS = ["run", "preview", "upload", "compile", "metrics", "devices", "send", "ops", "ops-preview", "link"]
+# The packages smartmonitor.py imports when it starts (hid only once it talks to the screen, see transport.py).
+NEEDED = ("yaml", "psutil", "PIL", "numpy")
+
+
+def missing_modules(names=NEEDED):
+    """The packages this Python can't import. Standard library only: it runs before those imports."""
+    import importlib.util
+    return [name for name in names if importlib.util.find_spec(name) is None]
+
+
+def key_typed(argv):
+    """True when the key itself was typed after --key (or an abbreviation argparse accepts: --k, --ke)."""
+    for index, word in enumerate(argv):
+        option, equals, _ = word.partition("=")
+        if option not in ("--k", "--ke", "--key"):
+            continue
+        if equals or (index + 1 < len(argv) and not argv[index + 1].startswith("-")):
+            return True
+    return False
+
+
+def wrong_python(missing, executable, argv, folder):
+    """What to say when smartmonitor.py runs on a Python without its packages. Never repeats what was typed after
+    the command: that can be the screen key."""
+    venv_scripts = os.path.join(folder, ".venv", "Scripts")
+    venv_python = os.path.join(venv_scripts, "python.exe")
+    command = argv[0] if argv and argv[0] in COMMANDS else ""
+    rest = (f" {command}" if command else "") + (" ..." if argv[1 if command else 0:] else "")
+    lines = [f"Deze Python mist wat de schermtool nodig heeft (geen {', '.join(missing)}):", f"  {executable}"]
+    if os.path.normcase(os.path.dirname(os.path.abspath(executable))) == os.path.normcase(venv_scripts):
+        lines += ["De .venv-map is onvolledig. Vul ze aan, in de map " + folder + ":",
+                  "  .venv\\Scripts\\python.exe -m pip install -r requirements.txt"]
+    else:
+        if not os.path.isfile(venv_python):
+            lines.append("Er is nog geen .venv-map: installeer eerst (LOKAAL.md, stap 1). Daarna:")
+        lines += ["Start het met de Python van de schermtool, in de map " + folder + ":",
+                  f"  .\\start-scherm.cmd{rest}",
+                  f"  of: .venv\\Scripts\\python.exe smartmonitor.py{rest}"]
+    if key_typed(argv):
+        lines.append("Laat de sleutel na --key weg: dan vraagt het ernaar en staat ze niet op het scherm of in de "
+                     "geschiedenis.")
+    return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    _missing = missing_modules()
+    if _missing:
+        sys.exit(wrong_python(_missing, sys.executable, sys.argv[1:], os.path.dirname(os.path.abspath(__file__))))
+
+import yaml  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -519,9 +572,7 @@ def yes_no(text):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Eigen dashboards op het SmartMonitor 3,5\"-schermpje (0483:0065).")
-    parser.add_argument("command", nargs="?", default="run",
-                        choices=["run", "preview", "upload", "compile", "metrics", "devices", "send", "ops",
-                                 "ops-preview", "link"])
+    parser.add_argument("command", nargs="?", default="run", choices=COMMANDS)
     parser.add_argument("pairs", nargs="*", help="bij send: tag=waarde ...; bij link: de arcoloo-minischerm-link")
     parser.add_argument("--theme", help="themamap (standaard: theme uit smartmonitor.yaml)")
     parser.add_argument("--out", help="uitvoerbestand voor preview, ops-preview of compile")

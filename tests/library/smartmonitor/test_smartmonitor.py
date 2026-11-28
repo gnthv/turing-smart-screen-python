@@ -4,6 +4,7 @@
 # Run from the project folder: python -m unittest tests.library.smartmonitor.test_smartmonitor -v
 
 import datetime
+import importlib.util
 import os
 import shutil
 import struct
@@ -413,6 +414,96 @@ class ProgramTest(unittest.TestCase):
             done = self.run_program("preview", "--theme", tmp, "--out", os.path.join(tmp, "p.png"))
             self.assertNotEqual(done.returncode, 0)
             self.assertIn("bestaat.niet", done.stderr)
+
+
+# ---------------------------------------------------------------- started with another Python
+
+def load_program():
+    spec = importlib.util.spec_from_file_location("smartmonitor_program", os.path.join(ROOT, "smartmonitor.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class WrongPythonTest(unittest.TestCase):
+    OTHER = r"C:\Python312\python.exe"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.program = load_program()
+
+    def message(self, argv, venv=True, in_venv=False):
+        with tempfile.TemporaryDirectory() as folder:
+            scripts = os.path.join(folder, ".venv", "Scripts")
+            if venv:
+                os.makedirs(scripts)
+                open(os.path.join(scripts, "python.exe"), "w").close()
+            executable = os.path.join(scripts, "python.exe") if in_venv else self.OTHER
+            return self.program.wrong_python(["yaml", "psutil"], executable, argv, folder), folder
+
+    def test_names_what_is_missing_and_which_python(self):
+        text, _ = self.message(["ops"])
+        self.assertIn("geen yaml, psutil", text)
+        self.assertIn(self.OTHER, text)
+
+    def test_suggests_the_tool_python_without_repeating_the_arguments(self):
+        text, folder = self.message(["ops", "--url", "https://ops.example", "--key", "msk_geheim"])
+        lines = text.splitlines()
+        self.assertIn(folder, text)
+        self.assertIn("  .\\start-scherm.cmd ops ...", lines)
+        self.assertIn("  of: .venv\\Scripts\\python.exe smartmonitor.py ops ...", lines)
+        self.assertNotIn("msk_geheim", text)
+        self.assertNotIn("ops.example", text)
+
+    def test_command_alone_or_nothing(self):
+        self.assertIn("  .\\start-scherm.cmd preview", self.message(["preview"])[0].splitlines())
+        self.assertIn("  .\\start-scherm.cmd", self.message([])[0].splitlines())
+
+    def test_unknown_first_word_is_not_repeated(self):
+        for argv in (["msk_geheim"], ["--key", "msk_geheim"], ["--upload"]):
+            text, _ = self.message(argv)
+            self.assertIn("  .\\start-scherm.cmd ...", text.splitlines(), argv)
+            self.assertNotIn("msk_geheim", text, argv)
+
+    def test_tip_when_the_key_itself_was_typed(self):
+        tip = "Laat de sleutel na --key weg"
+        for argv in (["ops", "--key", "msk_x"], ["ops", "--key=msk_x"], ["ops", "--ke", "msk_x"],
+                     ["ops", "--k=msk_x"]):
+            text, _ = self.message(argv)
+            self.assertIn(tip, text, argv)
+            self.assertNotIn("msk_x", text, argv)
+        for argv in (["ops", "--key"], ["ops", "--key", "--url", "https://x"], ["ops"], ["ops", "--keys", "x"]):
+            self.assertNotIn(tip, self.message(argv)[0], argv)
+
+    def test_no_venv_yet(self):
+        text, _ = self.message(["ops"], venv=False)
+        self.assertIn("nog geen .venv-map", text)
+        self.assertIn("LOKAAL.md, stap 1", text)
+        self.assertIn("  .\\start-scherm.cmd ops", text.splitlines())
+
+    def test_incomplete_venv(self):
+        text, _ = self.message(["ops"], in_venv=True)
+        self.assertIn(".venv\\Scripts\\python.exe -m pip install -r requirements.txt", text)
+        self.assertNotIn("start-scherm", text)
+
+    def test_commands_are_the_ones_the_program_knows(self):
+        self.assertIn("ops", self.program.COMMANDS)
+        self.assertIn("link", self.program.COMMANDS)
+        self.assertEqual(self.program.missing_modules(), [])  # the tests run on the tool's own Python
+
+    def test_program_on_a_python_without_the_packages(self):
+        # -S leaves out site-packages: this same Python then lacks yaml & co, like Windows' own Python.
+        probe = subprocess.run([sys.executable, "-S", "-c", "import importlib.util, sys; "
+                                "sys.exit(importlib.util.find_spec('yaml') is not None)"], timeout=60)
+        if probe.returncode:
+            self.skipTest("yaml is importable without site-packages here")
+        done = subprocess.run([sys.executable, "-S", os.path.join(ROOT, "smartmonitor.py"), "ops", "--key",
+                               "msk_geheim_123"], capture_output=True, text=True, cwd=ROOT, timeout=60)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("Deze Python mist wat de schermtool nodig heeft", done.stderr)
+        self.assertIn("geen yaml", done.stderr)
+        self.assertNotIn("Traceback", done.stderr)
+        self.assertNotIn("msk_geheim_123", done.stdout + done.stderr)
 
 
 if __name__ == "__main__":
