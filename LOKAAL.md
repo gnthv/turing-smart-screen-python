@@ -177,6 +177,10 @@ en klik **▶ Starten**.
 
 ## Problemen
 
+- **"Deze Python mist wat de schermtool nodig heeft"** (vroeger `ModuleNotFoundError: No module named 'yaml'`):
+  gestart met een andere Python, bv. `python smartmonitor.py …`. Gebruik `.\start-scherm.cmd …` of
+  `.venv\Scripts\python.exe smartmonitor.py …` in de map van de schermtool. Geef de sleutel met `--key` zonder
+  waarde: dan vraagt het ernaar en staat ze niet op het scherm.
 - **"Schermpje niet gevonden"**: kijk met `smartmonitor.py devices`; andere software afsluiten; ander USB-poortje.
 - **Klok blijft op 12:00:00 / 2022-01-01 en er verandert niets**: het schermpje hangt (gebeurt soms na het
   opstarten van de pc). Trek het uit en steek het terug in.
@@ -188,6 +192,6 @@ en klik **▶ Starten**.
 .venv\Scripts\python.exe -m unittest tests.library.smartmonitor.test_smartmonitor tests.library.smartmonitor.test_ops tests.library.smartmonitor.test_link -v
 ```
 
-29 tests met een nagebootst schermpje (YMODEM-ontvanger die elk blok controleert), het themaformaat, de voorvertoning,
+38 tests met een nagebootst schermpje (YMODEM-ontvanger die elk blok controleert), het themaformaat, de voorvertoning,
 foutmeldingen en de waarden; 27 voor `ops` (beurtrol en rood, het thema in alle vier de standen, de verbinding met ops
 met een lokale testserver, opnieuw opladen bij een nieuwe winkel, één programma tegelijk).
