@@ -166,7 +166,8 @@ def open_screen(transport, wait=True, say=print):
 
 
 def take_lock(say=print):
-    """One program on the screen at a time: two writers garble the theme upload and fight over the values."""
+    """One program on the screen at a time: two writers garble the theme upload and fight over the values.
+    This only stops a second smartmonitor.py; the browser and the kassa are handled by after_write_failure."""
     import psutil
     try:
         with open(LOCK_FILE, encoding="utf-8") as stream:
@@ -195,6 +196,47 @@ def take_lock(say=print):
         except OSError:
             pass
     atexit.register(release)
+
+
+OTHER_PROGRAM = ("Het schermpje startte twee keer opnieuw zonder dat dit programma iets opliet: een ander programma "
+                 "zette er zijn eigen thema op (het minischerm in de browser of het klantenscherm van de kassa). Dit "
+                 "programma stopt, zodat het dat andere programma niet stoort. Wil je het schermpje toch hier: sluit "
+                 "het andere programma en start dit opnieuw; het zet dan zijn eigen thema er weer op.")
+
+
+def screen_present():
+    from library.smartmonitor.transport import find_screens
+    try:
+        return bool(find_screens())
+    except OSError:
+        return False
+
+
+def forget_theme():
+    """Another program put its theme on the screen: the next start must upload ours again."""
+    state = read_state()
+    if state.get("uploaded_sha256"):
+        state["uploaded_sha256"] = None
+        write_state(state)
+
+
+def after_write_failure(transport, error, failures, say=print, wait=None, present=None):
+    """A write failed while we were not uploading: the screen went away. Write nothing until it is clear why
+    (library/smartmonitor/watch.py): stop when another program put its theme on it, else open the screen again."""
+    from library.smartmonitor import watch
+    transport.close()
+    if failures == 1:
+        say(f"Schermpje reageert niet ({error}). Even niets sturen: zet een ander programma er net een thema op, "
+            f"dan mag dit programma dat niet storen. Verder als het schermpje {watch.QUIET_S:.0f} s rustig blijft.")
+    elif failures == 5:
+        say("Blijft het mislukken? Trek het schermpje even uit en steek het terug in.")
+    try:
+        (wait or watch.wait_after_failure)(present or screen_present)
+    except watch.ForeignUpload:
+        forget_theme()
+        say(OTHER_PROGRAM)
+        sys.exit(1)
+    open_screen(transport, say=say)
 
 
 def upload(transport, compiled, folder):
@@ -246,12 +288,7 @@ def cmd_run(args, config):
             failures = 0
         except OSError as error:
             failures += 1
-            if failures == 1:
-                print(f"Schermpje reageert niet ({error}). Opnieuw verbinden...")
-            if failures == 5:
-                print("Blijft het mislukken? Trek het schermpje even uit en steek het terug in.")
-            transport.close()
-            open_screen(transport)
+            after_write_failure(transport, error, failures)
             continue
         time.sleep(max(0.0, interval - (time.monotonic() - started)))
 
@@ -499,12 +536,7 @@ def cmd_ops(args, config):
             continue
         except OSError as error:
             failures += 1
-            if failures == 1:
-                say(f"Schermpje reageert niet ({error}). Opnieuw verbinden...")
-            if failures == 5:
-                say("Blijft het mislukken? Trek het schermpje even uit en steek het terug in.")
-            transport.close()
-            open_screen(transport, say=say)
+            after_write_failure(transport, error, failures, say=say)
             continue
         if poller.last_status != last_status:
             last_status = poller.last_status
